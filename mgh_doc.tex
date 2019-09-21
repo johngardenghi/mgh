@@ -1,0 +1,507 @@
+\documentclass[11pt]{article}
+
+\usepackage{amsfonts}
+\usepackage{amsthm}
+\usepackage{amsmath}
+\usepackage[english]{babel}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{dirtree}
+\usepackage{longtable}
+
+\hypersetup{% 
+colorlinks=true, linkcolor=black, citecolor=black, urlcolor=black,
+pdffitwindow=true, plainpages=false, hypertexnames=false
+}
+
+\setlength{\textwidth}     {16.0cm}
+\setlength{\textheight}    {21.0cm}
+\setlength{\evensidemargin}{ 0.0cm}
+\setlength{\oddsidemargin} { 0.0cm}
+\setlength{\topmargin}     {-0.5cm}
+\setlength{\baselineskip}  { 0.7cm}
+
+\DeclareMathOperator*{\minimize}{Minimize}
+
+\newcommand{\R}{\mathbb{R}}
+
+\title{Fortran routines \\ for testing unconstrained
+  optimization software \\ with derivatives up to
+  third-order\thanks{This work has been partially supported by FAPESP
+    (grants 2013/03447-6, 2013/05475-7, 2013/07375-0, 2013/23494-9,
+    2016/01860-1, and 2017/03504-0) and CNPq (grants 309517/2014-1,
+    303750/2014-6, and 302915/2016-8).}}
+
+\author{E. G. Birgin\thanks{Department of Computer Science, Institute
+    of Mathematics and Statistics, University of S\~ao Paulo, Rua do
+    Mat\~ao, 1010, Cidade Universit\'aria, 05508-090, S\~ao Paulo, SP,
+    Brazil. e-mail: \{egbirgin$\;|\;$john\}@ime.usp.br} \hspace{4ex}
+  J. L. Gardenghi\footnotemark[2]\hspace{4ex}
+  J. M. Mart\'{i}nez\thanks{Department of Applied Mathematics,
+    Institute of Mathematics, Statistics, and Scientific Computing,
+    University of Campinas, Campinas, SP, Brazil. e-mail:
+    \{martinez$\;|\;$sandra\}@ime.unicamp.br} \hspace{4ex}
+  S. A. Santos\footnotemark[3]}
+
+\date{April 20, 2018}
+
+\parindent 0cm
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+
+\parskip 1ex
+
+\section{Introduction}
+
+This document gives details about the implementation and usage of a
+Fortran package that implements the computation of objective function
+and its first-, second-, and third-order derivatives for the
+well-known 35 problems proposed by Mor\'e, Garbow and
+Hillstrom~\cite{mghcode,mgh}.
+
+Originally, Mor\'e, Garbow, and Hilltrom proposed 35 test problems for
+unconstrained optimization and code for computing the objective
+function and its first-derivative. The problems were divided into
+three categories: (a) 14 \textit{systems of nonlinear equations},
+cases where $m=n$ and one searches for $x^*$ such that $f_i(x^*)=0$,
+$i = 1, 2, \ldots, m$; (b) 18 \textit{nonlinear least-squares}
+problems, cases where $m\geq n$ and one is interested in solving the
+problem
+\begin{equation} \label{prob}
+  \minimize_{x \in \R^n} f(x) = \sum_{i=1}^m f_i^2(x)
+\end{equation}
+by exploring its particular structure; and (c) 18
+\textit{unconstrained minimization} problems, where one is interested
+in solving~\eqref{prob} just by applying a general unconstrained
+optimization solver.
+
+In 1994, Averbukh, Figueroa, and Schlick~\cite{mghrem} added code to
+compute the second-order derivative for the 18 unconstrained
+minimization problems.
+
+We now propose a package that considers~\eqref{prob} for all the 35
+test problems and implements its first-, second-, and third-order
+derivatives.
+
+\section{Getting Started}
+
+When unzipping the code, the user must get the following directories
+and files: \\
+
+\dirtree{%
+  .1 \$(MGH) \dotfill \ \begin{minipage}[t]{7cm} root directory{.} \end{minipage}.
+  .2 Makefile.
+  .2 mgh\_doc.pdf \dotfill \ \begin{minipage}[t]{7cm} documentation PDF file{.} \end{minipage}.
+  .2 driver1.f08 \dotfill \ \begin{minipage}[t]{7cm} driver with new routines{.} \end{minipage}.
+  .2 driver2.f08 \dotfill \ \begin{minipage}[t]{7cm} driver with alg 566 routines{.} \end{minipage}.
+  .2 mgh.f08 \dotfill \ \begin{minipage}[t]{7cm} all the new routines{.} \end{minipage}.
+  .2 mgh\_wrapper.f08 \dotfill \ \begin{minipage}[t]{7cm} wrapper with alg 566 routines{.} \end{minipage}.
+  .2 set\_precision.f08 \dotfill \ \begin{minipage}[t]{7cm} precision definitions file{.} \end{minipage}.
+}
+
+\vspace{1em}
+
+After compiling the code, the user must get the binaries
+\verb|driver1| and \verb|driver2| and the object files inside
+\verb|$(MGH)|.
+
+\section{Compiling the code}
+
+To compile the main code,
+
+\begin{enumerate}
+
+\item The user must have a Fortran compiler installed and must
+  configure in \verb|$(MGH)/Makefile| the variables \verb|FC| with the
+  Fortran compiler command-line and \verb|FFLAGS| with the desired
+  flags for the chosen Fortran compiler. We tested \verb|gfortran| and
+  \verb|nagfor| compilers. Other Fortran compilers were not tested,
+  but they may work as well.
+
+\item Using the terminal, type \verb|make| in the root directory.
+
+\end{enumerate}
+
+To clean the compiled code, use \verb|make clean|.
+
+\section{Using the module and compiling code}
+
+To use the module, the user must make the following modifications in
+the code.
+
+\begin{enumerate}
+
+\item Choose the precision you want to use in module
+  \verb|$(MGH)/set_precision.f08|. For this, set the parameter
+  \verb|rk| as \verb|kind_s| for single-precision, \verb|kind_d| for
+  double-precision, and \verb|kind_q| for quad-precision.
+
+\item Implement the desired routines (see Section~\ref{sec:nr}).
+
+\item Compile your code
+\begin{verbatim}
+  $(FC) -I $(MGH) -o your_bin your_code.f08 
+                                      $(MGH)/mgh.o
+                                      $(MGH)/set_precision.o
+\end{verbatim}
+replacing \verb|$(FC)| by the Fortran compiler you are using. You may
+need to ajust command-line option \verb|-I|, that stands for the
+directory where \verb|.mod| files are.
+\end{enumerate}
+
+If the user prefer, it is possible to use the classic Algorithm 566
+routines, to which we added a new one to compute third-order
+derivatives. In this case,
+
+\begin{enumerate}
+
+\item Choose the precision you want to use in module
+  \verb|$(MGH)/set_precision.f08|. For this, set the parameter
+  \verb|rk| as \verb|kind_s| for single-precision, \verb|kind_d| for
+  double-precision, and \verb|kind_q| for quad-precision.
+
+\item Implement the desired routines in the code (see
+  Section~\ref{sec:or}).
+
+\item Compile your code
+\begin{verbatim}
+  $(FC) -I $(MGH) -o your_bin you_code.f08
+                                      $(MGH)/mgh.o
+                                      $(MGH)/mgh_wrapper.o
+                                      $(MGH)/set_precision.o
+\end{verbatim}
+replacing \verb|$(FC)| by the Fortran compiler you are using. You may
+need to ajust command-line option \verb|-I|, that stands for the
+directory where \verb|.mod| files are.
+
+\end{enumerate}
+
+\section{Using the drivers}
+
+Two drivers are available to test and validate the code:
+
+\begin{enumerate}
+
+\item \verb|$(MGH)/driver1| implements the new routines module. It
+  runs all the 35 problems from the test set. The output is given in
+  \verb|driver1.out| file.
+
+\item \verb|$(MGH)/driver2| implements the algorithm 566 routines. It
+  runs all the 18 unconstrained minimization problems
+  (see~\cite{mgh}). The output is given in \verb|driver2.out| file.
+
+\end{enumerate}
+
+\section{Routines description}
+
+\subsection{New routines}
+\label{sec:nr}
+
+In order to use the new routines, first of all the user must
+\begin{enumerate}
+\item set the number of problem to work with, between 1 and 35, using \verb|mgh_set_problem|,
+
+\item customize \verb|m| and \verb|n| using \verb|mgh_set_dims| or
+  retrieve default values using \verb|mgh_get_dims|,
+\end{enumerate}
+After that, the user is able to retrieve the initial point using
+\verb|mgh_get_x0| and compute the objective function and its first-,
+second-, and third-order derivatives using \verb|mgh_evalf|,
+\verb|mgh_evalg|, \verb|mgh_evalh|, and \verb|mgh_evalt|,
+respectively. A detailed description of each routine follows.
+
+\begin{description}
+
+\item[subroutine] \verb|mgh_set_problem( user_problem, flag )|
+
+  Sets the problem number. When the user set the problem number,
+  default dimensions (n and m) for it are automatically set. The
+  subroutines arguments are
+
+  \begin{longtable}{p{2.4cm} p{12cm}}
+    \verb|user_problem| & is an input integer argument that should
+    contain the problem number between 1 and 35. \\[1ex]
+
+    \verb|flag| & is an output integer argument that contains 0 if the
+    problem number was successfully set or -1 if the
+    \verb|user_problem| is out of the range.
+  \end{longtable}
+
+\item[subroutine] \verb|mgh_set_dims( n, m, flag )|
+
+  Sets the dimensions for the problem.
+
+  \begin{longtable}{p{1cm} p{13.4cm}}
+    \verb|n| & is an input optional integer argument, sets the number
+    of variables for the problem set. \\[1ex]
+
+    \verb|m| & is an input optional integer argument, sets the number
+    of equations for the problem set. \\[1ex]
+
+    \verb|flag| & is an output optional integer, in the return
+    contains 0 if the dimensions were set successfully, -1 if \verb|n|
+    is not valid, -2 if \verb|m| is not valid, or -3 if both are not
+    valid.
+  \end{longtable}
+
+\item[subroutine] \verb|mgh_get_dims( n, m )|
+
+  Gets the dimension for the problem.
+
+  \begin{longtable}{p{0.4cm} p{14cm}}
+    \verb|n| & is an output optional integer argument with the number
+    of variables for the problem. \\[1ex]
+
+    \verb|m| & is an output optional integer argument with the number
+    of equations for the problem.
+  \end{longtable}
+
+\item[subroutine] \verb|mgh_get_x0( x0, factor )|
+
+  Gets the initial point for the problem.
+
+  \begin{longtable}{p{1cm} p{13.4cm}}
+    \verb|x0| & is an output array of length \verb|n| that contains
+    the initial point. \\[1ex]
+
+    \verb|factor| & is an optional real scalar that scales the initial
+    point returned at \verb|x0|.
+  \end{longtable}
+
+\item[subroutine] \verb|mgh_evalf( x, f, flag )|
+
+  Computes the objective function evaluated at \verb|x|.
+
+  \begin{longtable}{p{1cm} p{13.4cm}}
+    \verb|x| & is an input real array of length \verb|n|, contains the
+    point in which the objective function must be evaluated. \\[1ex]
+
+    \verb|f| & is an output real that contains the objective function
+    evaluated at \verb|x|. \\[1ex]
+
+    \verb|flag| & is an output integer that contains 0 is the
+    computation was made successfully, -1 if problem is not between 1
+    and 35, or -3 if a division by zero was made.
+  \end{longtable}
+
+\item[subroutine] \verb|mgh_evalg( x, g, flag )|
+
+  Computes the gradient of the objective function evaluated at
+  \verb|x|.
+
+  \begin{longtable}{p{1cm} p{13.4cm}}
+    \verb|x| & is an input real array of length \verb|n|, contains the
+    point in which the gradient must be evaluated. \\[1ex]
+
+    \verb|g| & is an output real array of length \verb|n| that
+    contains the gradient evaluated at \verb|x|. \\[1ex]
+
+    \verb|flag| & is an output integer that contains 0 is the
+    computation was made successfully, -1 if problem is not between 1
+    and 35, or -3 if a division by zero was made.
+  \end{longtable}
+
+\item[subroutine] \verb|mgh_evalh( x, h, flag )|
+
+  Computes the Hessian of the objective function evaluated at
+  \verb|x|.
+
+  \begin{longtable}{p{1cm} p{13.4cm}}
+    \verb|x| & is an input real array of length \verb|n|, contains the
+    point in which the Hessian must be evaluated. \\[1ex]
+
+    \verb|h| & is an output real array of length \verb|n| $\times$
+    \verb|n| that contains the upper triangle of the Hessian evaluated
+    at \verb|x|. \\[1ex]
+
+    \verb|flag| & is an output integer that contains 0 is the
+    computation was made successfully, -1 if problem is not between 1
+    and 35, or -3 if a division by zero was made.
+  \end{longtable}
+
+\item[subroutine] \verb|mgh_evalt( x, t, flag )|
+
+  Computes the third-order derivative tensor of the objective function
+  evaluated at \verb|x|.
+
+  \begin{longtable}{p{1cm} p{13.4cm}}
+    \verb|x| & is an input real array of length \verb|n|, contains the
+    point in which the third-order derivative must be
+    evaluated. \\[1ex]
+
+    \verb|t| & is an output real array of length \verb|n| $\times$
+    \verb|n| $\times$ \verb|n| that contains the upper part of the
+    third-derivative evaluated at \verb|x|. \\[1ex]
+
+    \verb|flag| & is an output integer that contains 0 is the
+    computation was made successfully, -1 if problem is not between 1
+    and 35, or -3 if a division by zero was made.
+  \end{longtable}
+
+\item[subroutine] \verb|mgh_get_name( name )|
+
+  Returns the problem name
+
+  \begin{longtable}{p{1cm} p{13.4cm}}
+    \verb|name| & is a \verb|character(len=60)| output parameter that
+    contains the problem name.
+  \end{longtable}
+
+\end{description}
+
+\subsection{Algorithm 566 Routines + Third derivative computation}
+\label{sec:or}
+
+\begin{description}
+
+\item[subroutine] \verb|initpt( n, x, nprob, factor )|
+
+  Returns the initial point for a given problem.
+
+  \begin{longtable}{p{1cm} p{13.4cm}}
+    \verb|n| & is an integer input argument, should contain the
+    dimension of the problem. \\[1ex]
+	 
+    \verb|x| & is a real output array of length \verb|n|, contains the
+    initial point. \\[1ex]
+ 
+    \verb|nprob| & is an integer input, contains the number of the
+    problem betwen 1 and 18. \\[1ex]
+ 
+    \verb|factor| & is a real input, contains the factor by which the
+    initial point will be scaled.
+  \end{longtable}
+
+\item[subroutine] \verb|objfcn( n, x, f, nprob )|
+
+  Compute the objective function value for a given problem at
+  \verb|x|.
+
+  \begin{longtable}{p{1cm} p{13.4cm}}
+    \verb|n| & is an integer input argument, should contain the
+    dimension of the problem. \\[1ex]
+
+    \verb|x| & is a real input array of length \verb|n|, contains the
+    point in which the objective function will be evaluated. \\[1ex]
+
+    \verb|f| & is a real output argument that contains the objective
+    function value. \\[1ex]
+
+    \verb|nprob| & is an integer input, contains the number of the
+    problem between 1 and 18.
+  \end{longtable}
+
+\item[subroutine] \verb|grdfcn( n, x, g, nprob )|
+
+  Compute the gradient of the objective function, for a given problem,
+  evaluated at \verb|x|.
+
+  \begin{longtable}{p{1cm} p{13.4cm}}
+    \verb|n| & is an integer input argument, should contain the
+    dimension of the problem. \\[1ex]
+
+    \verb|x| & is a real input array of length \verb|n|, contains the
+    point in which the objective function will be evaluated. \\[1ex]
+
+    \verb|g| & is a real output array of length \verb|n|, contains the
+    gradient of the objective function value evaluated at
+    \verb|x|. \\[1ex]
+
+    \verb|nprob| & is an integer input, contains the number of the
+    problem between 1 and 18.
+  \end{longtable}
+
+\item[subroutine] \verb|hesfcn( n, x, hesd, hesu, nprob )|
+
+  Compute the Hessian of the objective function, for a given problem,
+  evaluated at \verb|x|.
+
+  \begin{longtable}{p{1cm} p{13.4cm}}
+    \verb|n| & is an integer input argument, should contain the
+    dimension of the problem. \\[1ex]
+
+    \verb|x| & is a real input array of length \verb|n|, contains the
+    point in which the objective function will be evaluated. \\[1ex]
+
+    \verb|hesd| & is a real output array of length \verb|n|, contains
+    the diagonal of the Hessian. \\[1ex]
+
+    \verb|hesu| & is a real output array of length
+    \[
+    \displaystyle \frac{n(n-1)}{2},
+    \]
+    contains the strict upper triangle of the Hessian stored by
+    columns. The $i,j$ term of the Hessian, $i<j$, is located at the
+    position
+    \[
+    \displaystyle \frac{(j-1)(j-2)}{2} + i
+    \]
+    at \verb|hesu|. \\[1ex]
+
+    \verb|nprob| & is an integer input, contains the number of the
+    problem between 1 and 18.
+  \end{longtable}
+
+\item[subroutine] \verb|trdfcn( n, x, td, tu, nprob )|
+
+  Compute the third-order derivative tensor of the objective function,
+  for a given problem, evaluated at \verb|x|.
+
+  \begin{longtable}{p{1cm} p{13.4cm}}
+    \verb|n| & is an integer input argument, should contain the
+    dimension of the problem. \\[1ex]
+
+    \verb|x| & is a real input array of length \verb|n|, contains the
+    point in which the objective function will be evaluated. \\[1ex]
+
+    \verb|td| & is a real output array of length \verb|n|, contains
+    the diagonal of the tensor. \\[1ex]
+
+    \verb|tu| & is a real output array of length
+    \[
+    \displaystyle \frac{n-1}{6}( (n-2)(n-3) + 9(n-2) + 12 ),
+    \]
+    contains the strict upper part of the tensor stored by columns.
+    The $i,j,k$ term of the tensor, $i \leq j \leq k$ but not $i=j=k$,
+    is located at the position
+    \[
+    \displaystyle \frac{k-2}{6}( (k-3)(k-4) + 9(k-3) + 12 ) +
+    \frac{j(j-1)}{2} + i
+    \]
+    at \verb|tu|. \\[1ex]
+
+    \verb|nprob| & is an integer input, contains the number of the
+    problem between 1 and 18.
+  \end{longtable}
+\end{description}
+
+\begin{thebibliography}{9}
+
+\bibitem{mghrem} V. Z. Averbukh, S. Figueroa, and T. Schlick, Remark
+  on Algorithm 566, \textit{ACM Transactions on Mathematical
+    Software}, 20(3):282--285,
+  1994. \href{https://dx.doi.org/10.1145/192115.192128}{DOI
+    10.1145/192115.192128}.
+
+\bibitem{mghcode} J. J. Mor{\'e}, B. S. Garbow, and K. E. Hillstrom,
+  Algorithm 566: FORTRAN Subroutines for Testing Unconstrained
+  Optimization Software, \textit{ACM Transactions on Mathematical
+    Software}, 7(1):136--140,
+  1981. \href{https://dx.doi.org/10.1145/355934.355943}{DOI
+    10.1145/355934.355943}.
+
+\bibitem{mgh} J. J. Mor{\'e}, B. S. Garbow, and K. E. Hillstrom,
+  Testing Unconstrained Optimization Software, \textit{ACM
+    Transactions on Mathematical Software}, 7(1):17--41,
+  1981. \href{https://dx.doi.org/10.1145/355934.355936}{DOI
+    10.1145/355934.355936}.
+
+\end{thebibliography}
+
+\end{document}
