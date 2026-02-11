@@ -3,19 +3,19 @@ FFLAGS := -O3
 
 all: driver1 driver2
 
-driver1: driver1.f08 mgh.o set_precision.o
+driver1: driver1.f90 mgh.o set_precision.o
 	$(FC) $(FFLAGS) -o $@ $^
 
-driver2: driver2.f08 mgh.o mgh_wrapper.o set_precision.o
+driver2: driver2.f90 mgh.o mgh_wrapper.o set_precision.o
 	$(FC) $(FFLAGS) -o $@ $^
 
-mgh.o: mgh.f08 set_precision.o
+mgh.o: mgh.f90 set_precision.o
 	$(FC) $(FFLAGS) -c -o $@ $<
 
-mgh_wrapper.o: mgh_wrapper.f08 mgh.o
+mgh_wrapper.o: mgh_wrapper.f90 mgh.o
 	$(FC) $(FFLAGS) -c -o $@ $<
 
-set_precision.o: set_precision.f08
+set_precision.o: set_precision.f90
 	$(FC) $(FFLAGS) -c -o $@ $<
 
 clean:
